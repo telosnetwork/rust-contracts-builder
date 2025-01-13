@@ -52,7 +52,7 @@ def build_contract(package_name, build_mode, target_dir, stack_size):
     os.environ['RUSTC_BOOTSTRAP'] = '1'
     print(f"RUSTC_BOOTSTRAP=\"{os.environ['RUSTC_BOOTSTRAP']}\"")
     print(f"RUSTFLAGS=\"{os.environ['RUSTFLAGS']}\"")
-    cmd = fr'cargo +stable build --target=wasm32-wasi --target-dir={target_dir} -Zbuild-std --no-default-features {build_mode} -Zbuild-std-features=panic_immediate_abort'
+    cmd = fr'cargo build --target=wasm32-wasi --target-dir={target_dir} -Zbuild-std --no-default-features {build_mode} -Zbuild-std-features=panic_immediate_abort'
     print(cmd)
     cmd = shlex.split(cmd)
     ret_code = subprocess.call(cmd, stdout=sys.stdout, stderr=sys.stderr)
