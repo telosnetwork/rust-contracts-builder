@@ -46,13 +46,34 @@ def get_rustc_version():
         print(f"An error occurred while checking the rustc version: {e}")
         return None
 
+def get_rustc_wasi_target():
+    try:
+        # Get the list of targets supported by `rustc`
+        result = subprocess.run(["rustc", "--print", "target-list"], capture_output=True, text=True)
+        targets = result.stdout.strip().splitlines()
+
+        # Filter the `wasi` targets
+        filtered_targets = [target for target in targets if "wasm32-wasi" in target]
+
+        if "wasm32-wasip1" in filtered_targets:
+            return "wasm32-wasip1"
+        elif "wasm32-wasi" in filtered_targets:
+            return "wasm32-wasi"
+        else:
+            print(f"Could not find the `wasm32-wasi` target in the list of supported targets (see `rustc --print target-list`)")
+            return None
+    except Exception as e:
+        print(f"An error occurred while checking the rustc targets: {e}")
+        return None
+
 def build_contract(package_name, build_mode, target_dir, stack_size):
     os.environ['RUSTFLAGS'] = f'-C link-arg=-zstack-size={stack_size} -Clinker-plugin-lto'
     version = get_rustc_version()
+    rust_target = get_rustc_wasi_target()
     os.environ['RUSTC_BOOTSTRAP'] = '1'
     print(f"RUSTC_BOOTSTRAP=\"{os.environ['RUSTC_BOOTSTRAP']}\"")
     print(f"RUSTFLAGS=\"{os.environ['RUSTFLAGS']}\"")
-    cmd = fr'cargo build --target=wasm32-wasi --target-dir={target_dir} -Zbuild-std --no-default-features {build_mode} -Zbuild-std-features=panic_immediate_abort'
+    cmd = fr'cargo build --target={rust_target} --target-dir={target_dir} -Zbuild-std --no-default-features {build_mode} -Zbuild-std-features=panic_immediate_abort'
     print(cmd)
     cmd = shlex.split(cmd)
     ret_code = subprocess.call(cmd, stdout=sys.stdout, stderr=sys.stderr)
@@ -60,19 +81,19 @@ def build_contract(package_name, build_mode, target_dir, stack_size):
         sys.exit(ret_code)
 
     try:
-        check_import_section(f'{target_dir}/wasm32-wasi/release/{package_name}.wasm')
+        check_import_section(f'{target_dir}/{rust_target}/release/{package_name}.wasm')
     except Exception as e:
         print_err(f'{e}')
         sys.exit(-1)
 
     if shutil.which('wasm-opt'):
-        cmd = f'wasm-opt {target_dir}/wasm32-wasi/release/{package_name}.wasm --signext-lowering -O3 --strip-debug -o {target_dir}/{package_name}.wasm'
+        cmd = f'wasm-opt {target_dir}/{rust_target}/release/{package_name}.wasm --signext-lowering -O3 --strip-debug -o {target_dir}/{package_name}.wasm'
         cmd = shlex.split(cmd)
         ret_code = subprocess.call(cmd, stdout=sys.stdout, stderr=sys.stderr)
         if not ret_code == 0:
             sys.exit(ret_code)
     else:
-        shutil.copy(f'{target_dir}/wasm32-wasi/release/{package_name}.wasm', f'{target_dir}/{package_name}.wasm')
+        shutil.copy(f'{target_dir}/{rust_target}/release/{package_name}.wasm', f'{target_dir}/{package_name}.wasm')
         print_warning('''
 wasm-opt not found! Make sure the binary is in your PATH environment.
 We use this tool to optimize the size of your contract's Wasm binary.
